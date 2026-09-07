@@ -1,5 +1,6 @@
 from optparse import OptionParser
 from Bio.PDB import PDBList
+import math
 AA_STANDARD = {"ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"}
 class Atom:
     """Represent an atom extracted from a PDB file."""
@@ -20,6 +21,14 @@ class Atom:
     def is_hydrogen(self):
         """Return True if the atom is a hydrogen atom, otherwise False."""
         return self.element_symbol == "H"
+
+    def distance_to(self, other_atom):
+        """Calculate euclidean distance to other atom."""
+        dx = self.x - other_atom.x
+        dy = self.y - other_atom.y
+        dz = self.z - other_atom.z
+        distance = math.sqrt(dx**2 + dy**2 + dz**2)
+        return distance
 
     def __str__(self):
         """Return a string describing the atom and its coordinates."""
@@ -301,15 +310,37 @@ def read_pdb(file_name):
             protein.add_atom_to_chain(chain_identifier, residue_name, residue_sequence_number, code_for_insertion_of_residues, atom)
     return protein
 
+def find_interface_pairs(chain1, chain2, threshold):
+    """Find interface residues between 2 proteins chains."""
+    interface_pairs = set()
+    for residue1 in chain1.residues:
+        for atom1 in residue1.atoms:
+            for residue2 in chain2.residues:
+                for atom2 in residue2.atoms:
+                    distance = atom1.distance_to(atom2)
+                    if distance <= threshold:
+                        interface_pairs.add((residue1, residue2))
+    return interface_pairs
+
 def main():
     parser = OptionParser()
+    parser.add_option("--chains", dest="chains", help="Two chains to compare, separated by a comma, ex: A,C")
+    parser.add_option("--threshold", dest="threshold", type="float", default=6.0, help="Distance threshold in Angstroms, default: 6.0")
     options, args = parser.parse_args()
+    chain_identifiers = options.chains.split(",")
+    threshold = options.threshold
     if len(args) != 1:
         parser.error("Please give one PDB identifant")
+    if options.chains is None:
+        parser.error("Please specify 2 chain with --chains, ex: --chains A,C")
+    if len(chain_identifiers) != 2:
+            parser.error("--chains requires two chain identifiers separated by a comma, ex: A,C")
     pdb_id = args[0]
     file_name = download_pdb(pdb_id)
     protein = read_pdb(file_name)
     print(protein)
+    chain1 = protein.find_chain(chain_identifiers[0])
+    chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
         print("Chain :", chain.chain_identifier, "Residues :", len(chain.residues), "Atoms :", chain.number_of_atoms())
     print("Excluded waters :", len(protein.excluded_waters))
@@ -323,6 +354,12 @@ def main():
         print("Hydrogen atoms are present in the structure.")
     else : 
         print("No hydrogen atoms were found in the structure.")
+    print("Selected chains :", chain1.chain_identifier, "and", chain2.chain_identifier)
+    # Identify residues in interface
+    interface_pairs = find_interface_pairs(chain1, chain2, threshold)
+    print('Number of interface residue pairs:', len(interface_pairs))
+    for residue1, residue2 in interface_pairs:
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number, "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number)
 
 if __name__ == "__main__":
     main()
