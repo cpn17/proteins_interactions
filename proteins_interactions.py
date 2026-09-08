@@ -6,6 +6,14 @@ from openbabel import openbabel
 
 AA_STANDARD = {"ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"}
 HYDROPHOBIC_DISTANCE = 4.0
+HBOND_DISTANCE = 4.1
+HBOND_ANGLE = 100.0
+MIN_DISTANCE = 0.5
+SALT_BRIDGE_DISTANCE = 5.5
+PISTACK_DISTANCE = 5.5
+PISTACK_ANGLE_DEVIATION = 30.0
+PISTACK_OFFSET = 2.0
+
 class Atom:
     """Represent an atom extracted from a PDB file."""
     def __init__(self, atom_serial_number, atom_name, 
@@ -55,6 +63,20 @@ class Residue:
         """Find an atom in the residue from its name."""
         for atom in self.atoms:
             if atom.atom_name == atom_name:
+                return atom
+        return None
+
+    def find_atom_by_serial(self, atom_serial_number):
+        """Find an atom in the residue from its serial number."""
+        for atom in self.atoms:
+            if atom.atom_serial_number == atom_serial_number:
+                return atom
+        return None
+
+    def find_atom_by_coordinates(self, x, y, z, tolerance=0.01):
+        """Find an atom in the residue from its coordinates."""
+        for atom in self.atoms:
+            if abs(atom.x - x) < tolerance and abs(atom.y - y) < tolerance and abs(atom.z - z) < tolerance:
                 return atom
         return None
 
@@ -393,10 +415,69 @@ def prepare_hydrophobic_atoms(protein, molecule):
         if atom is not None:
             residue.hydrophobic_atoms.append(atom)
 
+def map_openbabel_atom(protein, ob_atom):
+    """Map an Open Babel atom to an Atom object."""
+    ob_residue = ob_atom.GetResidue()
+    if ob_residue is None:
+        return None
+    chain = protein.find_chain(ob_residue.GetChain())
+    if chain is None:
+        return None
+    residue = chain.find_residue(ob_residue.GetNum(), "")
+    if residue is None:
+        return None
+    return residue.find_atom_by_coordinates(ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ())
+
+def prepare_hbond_acceptors(protein, molecule):
+    """Identify hydrogen-bond acceptor atoms using Open Babel."""
+    for ob_atom in openbabel.OBMolAtomIter(molecule):
+        if not ob_atom.IsHbondAcceptor():
+            continue
+        atom = map_openbabel_atom(protein, ob_atom)
+        if atom is None:
+            continue
+        ob_residue = ob_atom.GetResidue()
+        chain = protein.find_chain(ob_residue.GetChain())
+        residue = chain.find_residue(ob_residue.GetNum(), "")
+        residue.hbond_acceptors.append(atom)
+
+def prepare_hbond_donors(protein, molecule):
+    """Identify hydrogen-bond donor and hydrogen atom pairs using Open Babel."""
+    for ob_donor in openbabel.OBMolAtomIter(molecule):
+        if not ob_donor.IsHbondDonor():
+            continue
+        donor = map_openbabel_atom(protein, ob_donor)
+        if donor is None:
+            continue
+        ob_residue = ob_donor.GetResidue()
+        chain = protein.find_chain(ob_residue.GetChain())
+        residue = chain.find_residue(ob_residue.GetNum(), "")
+        for ob_hydrogen in openbabel.OBAtomAtomIter(ob_donor):
+            if not ob_hydrogen.IsHbondDonorH():
+                continue
+            hydrogen = map_openbabel_atom(protein, ob_hydrogen)
+            if hydrogen is not None:
+                residue.hbond_donors.append((donor, hydrogen))
+
+def calculate_angle(atom1, vertex, atom2):
+    """Calculate the angle between three atoms in degrees."""
+    vector1 = (atom1.x - vertex.x, atom1.y - vertex.y, atom1.z - vertex.z)
+    vector2 = (atom2.x - vertex.x, atom2.y - vertex.y, atom2.z - vertex.z)
+    dot_product = sum(a * b for a, b in zip(vector1, vector2))
+    norm1 = math.sqrt(sum(a**2 for a in vector1))
+    norm2 = math.sqrt(sum(a**2 for a in vector2))
+    cosine = dot_product / (norm1 * norm2)
+    cosine = max(-1.0, min(1.0, cosine))
+    return math.degrees(math.acos(cosine))
+
 def prepare_protein(protein, file_name):
     """Prepare chemical features used for interaction detection."""
     molecule = read_openbabel_molecule(file_name)
     prepare_hydrophobic_atoms(protein, molecule)
+    prepare_hbond_acceptors(protein, molecule)
+    prepare_hbond_donors(protein, molecule)
+    prepare_charged_groups(protein)
+    prepare_aromatic_rings(protein)
 
 def detect_hydrophobic_contact(residue1, residue2):
     """Detect a hydrophobic contact between two residues.
@@ -422,7 +503,189 @@ def detect_hydrophobic_contact(residue1, residue2):
                     minimum_distance = distance
     return minimum_distance
 
+def find_hydrogen_bonds(residue1, residue2):
+    """Find hydrogen bonds between two residues."""
+    hydrogen_bonds = []
+    for donor, hydrogen in residue1.hbond_donors:
+        for acceptor in residue2.hbond_acceptors:
+            distance = donor.distance_to(acceptor)
+            if not MIN_DISTANCE < distance < HBOND_DISTANCE:
+                continue
+            angle = calculate_angle(donor, hydrogen, acceptor)
+            if angle > HBOND_ANGLE:
+                hydrogen_bonds.append((donor, hydrogen, acceptor, distance, angle))
+    for donor, hydrogen in residue2.hbond_donors:
+        for acceptor in residue1.hbond_acceptors:
+            distance = donor.distance_to(acceptor)
+            if not MIN_DISTANCE < distance < HBOND_DISTANCE:
+                continue
+            angle = calculate_angle(donor, hydrogen, acceptor)
+            if angle > HBOND_ANGLE:
+                hydrogen_bonds.append((donor, hydrogen, acceptor, distance, angle))
+    return hydrogen_bonds
 
+class ChargedGroup:
+    """Represent a charged functional group."""
+    def __init__(self, charge_type, atoms):
+        """Initialize a charged group."""
+        self.charge_type = charge_type
+        self.atoms = atoms
+
+    def center(self):
+        """Calculate the geometric center of the charged group."""
+        x = sum(atom.x for atom in self.atoms) / len(self.atoms)
+        y = sum(atom.y for atom in self.atoms) / len(self.atoms)
+        z = sum(atom.z for atom in self.atoms) / len(self.atoms)
+        return x, y, z
+
+def prepare_charged_groups(protein):
+    """Identify charged functional groups in protein residues."""
+    group_atoms = {"ARG": ("positive", ["NE", "CZ", "NH1", "NH2"]),
+                   "LYS": ("positive", ["NZ"]),
+                   "ASP": ("negative", ["CG", "OD1", "OD2"]),
+                   "GLU": ("negative", ["CD", "OE1", "OE2"])}
+    for chain in protein.chains:
+        for residue in chain.residues:
+            if residue.residue_name not in group_atoms:
+                continue
+            charge_type, atom_names = group_atoms[residue.residue_name]
+            atoms = []
+            for atom_name in atom_names:
+                atom = residue.find_atom(atom_name)
+                if atom is not None:
+                    atoms.append(atom)
+            if len(atoms) == len(atom_names):
+                residue.charged_groups.append(ChargedGroup(charge_type, atoms))
+
+def distance_between_points(point1, point2):
+    """Calculate the Euclidean distance between two points."""
+    dx = point1[0] - point2[0]
+    dy = point1[1] - point2[1]
+    dz = point1[2] - point2[2]
+    return math.sqrt(dx**2 + dy**2 + dz**2)
+
+def find_salt_bridges(residue1, residue2):
+    """Find salt bridges between two residues."""
+    salt_bridges = []
+    for group1 in residue1.charged_groups:
+        for group2 in residue2.charged_groups:
+            if group1.charge_type == group2.charge_type:
+                continue
+            distance = distance_between_points(group1.center(), group2.center())
+            if MIN_DISTANCE < distance < SALT_BRIDGE_DISTANCE:
+                salt_bridges.append((group1, group2, distance))
+    return salt_bridges
+
+def refine_hydrogen_bonds(hydrogen_bonds, salt_bridges):
+    """Refine hydrogen bonds using detected salt bridges."""
+    filtered_bonds = []
+    for residue1, residue2, bond in hydrogen_bonds:
+        donor, hydrogen, acceptor, distance, angle = bond
+        salt_bridge_hbond = False
+        for salt_residue1, salt_residue2, bridge in salt_bridges:
+            group1, group2, salt_distance = bridge
+            if donor in group1.atoms and acceptor in group2.atoms:
+                salt_bridge_hbond = True
+            if donor in group2.atoms and acceptor in group1.atoms:
+                salt_bridge_hbond = True
+        if not salt_bridge_hbond:
+            filtered_bonds.append((residue1, residue2, bond))
+    best_bonds = {}
+    for residue1, residue2, bond in filtered_bonds:
+        donor, hydrogen, acceptor, distance, angle = bond
+        if donor not in best_bonds or angle > best_bonds[donor][2][4]:
+            best_bonds[donor] = (residue1, residue2, bond)
+    return list(best_bonds.values())
+
+class AromaticRing:
+    """Represent an aromatic ring."""
+    def __init__(self, atoms):
+        """Initialize an aromatic ring."""
+        self.atoms = atoms
+
+    def center(self):
+        """Calculate the geometric center of the ring."""
+        x = sum(atom.x for atom in self.atoms) / len(self.atoms)
+        y = sum(atom.y for atom in self.atoms) / len(self.atoms)
+        z = sum(atom.z for atom in self.atoms) / len(self.atoms)
+        return x, y, z
+
+    def normal(self):
+        """Calculate a normal vector to the ring plane."""
+        atom1 = self.atoms[0]
+        atom2 = self.atoms[2]
+        atom3 = self.atoms[4]
+        vector1 = (atom2.x - atom1.x, atom2.y - atom1.y, atom2.z - atom1.z)
+        vector2 = (atom3.x - atom1.x, atom3.y - atom1.y, atom3.z - atom1.z)
+        normal = (vector1[1] * vector2[2] - vector1[2] * vector2[1],
+                  vector1[2] * vector2[0] - vector1[0] * vector2[2],
+                  vector1[0] * vector2[1] - vector1[1] * vector2[0])
+        norm = math.sqrt(sum(value**2 for value in normal))
+        return tuple(value / norm for value in normal)
+
+def prepare_aromatic_rings(protein):
+    """Identify aromatic rings in protein residues."""
+    ring_atoms = {"PHE": [["CG", "CD1", "CE1", "CZ", "CE2", "CD2"]],
+                      "TYR": [["CG", "CD1", "CE1", "CZ", "CE2", "CD2"]],
+                      "HIS": [["CG", "ND1", "CE1", "NE2", "CD2"]],
+                      "TRP": [["CG", "CD1", "NE1", "CE2", "CD2"],
+                              ["CD2", "CE2", "CZ2", "CH2", "CZ3", "CE3"]]}
+    for chain in protein.chains:
+        for residue in chain.residues:
+            if residue.residue_name not in ring_atoms:
+                continue
+            for atom_names in ring_atoms[residue.residue_name]:
+                atoms = []
+                for atom_name in atom_names:
+                    atom = residue.find_atom(atom_name)
+                    if atom is not None:
+                        atoms.append(atom)
+                if len(atoms) == len(atom_names):
+                    residue.aromatic_rings.append(AromaticRing(atoms))
+
+def angle_between_vectors(vector1, vector2):
+    """Calculate the angle between two vectors in degrees."""
+    dot_product = sum(a * b for a, b in zip(vector1, vector2))
+    norm1 = math.sqrt(sum(a**2 for a in vector1))
+    norm2 = math.sqrt(sum(a**2 for a in vector2))
+    cosine = dot_product / (norm1 * norm2)
+    cosine = max(-1.0, min(1.0, cosine))
+    angle = math.degrees(math.acos(cosine))
+    return min(angle, 180.0 - angle)
+
+def calculate_ring_offset(center1, center2, normal):
+    """Calculate the lateral offset between two ring centers."""
+    vector = (center2[0] - center1[0],
+              center2[1] - center1[1],
+              center2[2] - center1[2])
+    projection = sum(vector[i] * normal[i] for i in range(3))
+    perpendicular = tuple(vector[i] - projection * normal[i] for i in range(3))
+    return math.sqrt(sum(value**2 for value in perpendicular))
+
+def find_aromatic_interactions(residue1, residue2):
+    """Find pi-stacking interactions between two residues."""
+    interactions = []
+    for ring1 in residue1.aromatic_rings:
+        for ring2 in residue2.aromatic_rings:
+            center1 = ring1.center()
+            center2 = ring2.center()
+            distance = distance_between_points(center1, center2)
+            if not MIN_DISTANCE < distance < PISTACK_DISTANCE:
+                continue
+            normal1 = ring1.normal()
+            normal2 = ring2.normal()
+            angle = angle_between_vectors(normal1, normal2)
+            offset1 = calculate_ring_offset(center1, center2, normal1)
+            offset2 = calculate_ring_offset(center2, center1, normal2)
+            offset = min(offset1, offset2)
+            interaction_type = None
+            if angle < PISTACK_ANGLE_DEVIATION and offset < PISTACK_OFFSET:
+                interaction_type = "parallel"
+            if 90 - PISTACK_ANGLE_DEVIATION < angle < 90 + PISTACK_ANGLE_DEVIATION and offset < PISTACK_OFFSET:
+                interaction_type = "T-shaped"
+            if interaction_type is not None:
+                interactions.append((ring1, ring2, distance, angle, offset, interaction_type))
+    return interactions
 
 def main():
     parser = OptionParser()
@@ -445,10 +708,30 @@ def main():
         print("No hydrogen atoms found. Adding hydrogens with Open Babel")
         file_name = add_hydrogens(file_name)
         protein = read_pdb(file_name)
-
     
     # Prepare to classification
     prepare_protein(protein, file_name)
+    lys57 = protein.find_chain("C").find_residue(57, "")
+    asp111 = protein.find_chain("A").find_residue(111, "")
+
+    print("LYS57 donors:")
+    for donor, hydrogen in lys57.hbond_donors:
+        print("donor:", donor.atom_name, "H:", hydrogen.atom_serial_number)
+
+    print("ASP111 acceptors:")
+    for acceptor in asp111.hbond_acceptors:
+        print("acceptor:", acceptor.atom_name)
+
+    for donor, hydrogen in lys57.hbond_donors:
+        for acceptor in asp111.hbond_acceptors:
+            distance = donor.distance_to(acceptor)
+            angle = calculate_angle(donor, hydrogen, acceptor)
+            print("donor:", donor.atom_name,
+                "H:", hydrogen.atom_serial_number,
+                "acceptor:", acceptor.atom_name,
+                "distance:", round(distance, 2),
+                "angle:", round(angle, 2))
+
     chain1 = protein.find_chain(chain_identifiers[0])
     chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
@@ -482,6 +765,53 @@ def main():
             "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
             "hydrophobic distance :", round(distance, 2))
 
-        
+    # Ponts salins
+    salt_bridges = []
+    for residue1, residue2, minimum_distance in interface_pairs:
+        for bridge in find_salt_bridges(residue1, residue2):
+            salt_bridges.append((residue1, residue2, bridge))
+
+    print("Salt bridges :", len(salt_bridges))
+    for residue1, residue2, bridge in salt_bridges:
+        group1, group2, distance = bridge
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
+            "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
+            "salt bridge distance :", round(distance, 2))
+    # Liaisons H
+    hydrogen_bonds = []
+    for residue1, residue2, minimum_distance in interface_pairs:
+        for bond in find_hydrogen_bonds(residue1, residue2):
+            hydrogen_bonds.append((residue1, residue2, bond))
+
+    # Refine
+    hydrogen_bonds = refine_hydrogen_bonds(hydrogen_bonds, salt_bridges)
+
+    print("Hydrogen bonds :", len(hydrogen_bonds))
+    for residue1, residue2, bond in hydrogen_bonds:
+        donor, hydrogen, acceptor, distance, angle = bond
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
+              "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
+              "donor:", donor.atom_name,
+              "H:", hydrogen.atom_serial_number,
+              "acceptor:", acceptor.atom_name,
+              "distance:", round(distance, 2),
+              "angle:", round(angle, 2))
+
+    # Aromatic
+    aromatic_interactions = []
+    for residue1, residue2, minimum_distance in interface_pairs:
+        for interaction in find_aromatic_interactions(residue1, residue2):
+            aromatic_interactions.append((residue1, residue2, interaction))
+
+    print("Aromatic interactions :", len(aromatic_interactions))
+    for residue1, residue2, interaction in aromatic_interactions:
+        ring1, ring2, distance, angle, offset, interaction_type = interaction
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
+            "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
+            "type:", interaction_type,
+            "distance:", round(distance, 2),
+            "angle:", round(angle, 2),
+            "offset:", round(offset, 2))
+    
 if __name__ == "__main__":
     main()
