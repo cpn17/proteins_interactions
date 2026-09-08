@@ -1,6 +1,9 @@
 from optparse import OptionParser
+
 from Bio.PDB import PDBList
 import math
+import subprocess 
+
 AA_STANDARD = {"ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"}
 class Atom:
     """Represent an atom extracted from a PDB file."""
@@ -41,6 +44,11 @@ class Residue:
         self.residue_sequence_number = residue_sequence_number
         self.code_for_insertion_of_residues = code_for_insertion_of_residues
         self.atoms = []
+        self.hydrophobic_atoms = []
+        self.hbond_donors = []
+        self.hbond_acceptors = []
+        self.charged_groups = []
+        self.aromatic_rings = []
 
     def add_atom(self, atom):
         """Add an atom to the residue.
@@ -311,16 +319,40 @@ def read_pdb(file_name):
     return protein
 
 def find_interface_pairs(chain1, chain2, threshold):
-    """Find interface residues between 2 proteins chains."""
-    interface_pairs = set()
+    """Find residue pairs in contact and their minimum heavy-atom distance."""
+    interface_pairs = []
     for residue1 in chain1.residues:
-        for atom1 in residue1.atoms:
-            for residue2 in chain2.residues:
+        for residue2 in chain2.residues:
+            minimum_distance = None
+            for atom1 in residue1.atoms:
+                if atom1.is_hydrogen():
+                    continue
                 for atom2 in residue2.atoms:
+                    if atom2.is_hydrogen():
+                        continue
                     distance = atom1.distance_to(atom2)
-                    if distance <= threshold:
-                        interface_pairs.add((residue1, residue2))
+                    if minimum_distance is None or distance < minimum_distance:
+                        minimum_distance = distance
+            if minimum_distance is not None and minimum_distance <= threshold:
+                interface_pairs.append((residue1, residue2, minimum_distance))
     return interface_pairs
+
+def add_hydrogens(file_name):
+    """Add hydrogens atoms to a PDB file using Open Babel.
+    
+    Parameters
+    ----------
+    file_name : str
+        Path of the input PDB file
+    
+    Returns
+    -------
+    str
+        Path of the protonated PDB file
+    """
+    output_file = file_name.rsplit(".", 1)[0] + "_H.pdb"
+    subprocess.run(["obabel", file_name, "-O", output_file, "-h"], check=True)
+    return output_file
 
 def main():
     parser = OptionParser()
@@ -339,6 +371,10 @@ def main():
     file_name = download_pdb(pdb_id)
     protein = read_pdb(file_name)
     print(protein)
+    if not protein.contains_hydrogen():
+        print("No hydrogen atoms found. Adding hydrogens with Open Babel")
+        file_name = add_hydrogens(file_name)
+        protein = read_pdb(file_name)
     chain1 = protein.find_chain(chain_identifiers[0])
     chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
@@ -358,8 +394,8 @@ def main():
     # Identify residues in interface
     interface_pairs = find_interface_pairs(chain1, chain2, threshold)
     print('Number of interface residue pairs:', len(interface_pairs))
-    for residue1, residue2 in interface_pairs:
-        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number, "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number)
+    for residue1, residue2, minimum_distance in interface_pairs:
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number, "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number, "minimum distance :", round(minimum_distance,4))
 
 if __name__ == "__main__":
     main()
