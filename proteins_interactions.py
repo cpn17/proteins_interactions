@@ -354,6 +354,62 @@ def add_hydrogens(file_name):
     subprocess.run(["obabel", file_name, "-O", output_file, "-h"], check=True)
     return output_file
 
+# Detection of hydrophobic contacts
+# Hydrophobic residues
+HYDROPHOBIC_ATOMS = {"ALA": {"CB"},
+                     "VAL": {"CB", "CG1", "CG2"},
+                     "LEU": {"CB", "CG", "CD1", "CD2"},
+                     "ILE": {"CB", "CG1", "CG2", "CD1"},
+                     "MET": {"CB", "CG", "CE"},
+                     "PHE": {"CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ"},
+                     "TRP": {"CB", "CG", "CD1", "CD2", "CE2", "CE3", "CZ2", "CZ3", "CH2"},
+                     "TYR": {"CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ"},
+                     "PRO": {"CB", "CG", "CD"}}
+
+def prepare_hydrophobic_atoms(residue):
+    """Identify hydrophobic atoms in a residue."""
+    residue.hydrophobic_atoms = []
+    atom_names = HYDROPHOBIC_ATOMS.get(residue.residue_name, set())
+    for atom in residue.atoms:
+        if atom.atom_name in atom_names:
+            residue.hydrophobic_atoms.append(atom)
+
+def prepare_residue(residue):
+    """Prepare chemical features used for interaction detection."""
+    prepare_hydrophobic_atoms(residue)
+
+HYDROPHOBIC_DISTANCE = 4.0
+
+def detect_hydrophobic_contact(residue1, residue2):
+    """Detect a hydrophobic contact between two residues.
+
+    Parameters
+    ----------
+    residue1 : Residue
+        First residue.
+    residue2 : Residue
+        Second residue.
+
+    Returns
+    -------
+    float or None
+        Minimum distance between hydrophobic atoms if a contact is found, otherwise None.
+    """
+    minimum_distance = None
+    for atom1 in residue1.hydrophobic_atoms:
+        for atom2 in residue2.hydrophobic_atoms:
+            distance = atom1.distance_to(atom2)
+            if distance <= HYDROPHOBIC_DISTANCE:
+                if minimum_distance is None or distance < minimum_distance:
+                    minimum_distance = distance
+    return minimum_distance
+
+def prepare_protein(protein):
+    """Prepare all residues of a protein for interaction detection."""
+    for chain in protein.chains:
+        for residue in chain.residues:
+            prepare_residue(residue)
+
 def main():
     parser = OptionParser()
     parser.add_option("--chains", dest="chains", help="Two chains to compare, separated by a comma, ex: A,C")
@@ -375,6 +431,8 @@ def main():
         print("No hydrogen atoms found. Adding hydrogens with Open Babel")
         file_name = add_hydrogens(file_name)
         protein = read_pdb(file_name)
+    # Prepare to classification
+    prepare_protein(protein)
     chain1 = protein.find_chain(chain_identifiers[0])
     chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
@@ -396,6 +454,17 @@ def main():
     print('Number of interface residue pairs:', len(interface_pairs))
     for residue1, residue2, minimum_distance in interface_pairs:
         print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number, "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number, "minimum distance :", round(minimum_distance,4))
-
+    # Classification into hydrophobic contacts :
+    hydrophobic_contacts = []
+    for residue1, residue2, interface_distance in interface_pairs:
+        hydrophobic_distance = detect_hydrophobic_contact(residue1, residue2)
+        if hydrophobic_distance is not None:
+            hydrophobic_contacts.append((residue1, residue2, hydrophobic_distance))
+    print("Hydrophobic contacts :", len(hydrophobic_contacts))
+    for residue1, residue2, distance in hydrophobic_contacts:
+        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
+            "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
+            "hydrophobic distance :", round(distance, 2))
+        
 if __name__ == "__main__":
     main()
