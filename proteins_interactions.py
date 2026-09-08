@@ -2,9 +2,10 @@ from optparse import OptionParser
 
 from Bio.PDB import PDBList
 import math
-import subprocess 
+from openbabel import openbabel
 
 AA_STANDARD = {"ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"}
+HYDROPHOBIC_DISTANCE = 4.0
 class Atom:
     """Represent an atom extracted from a PDB file."""
     def __init__(self, atom_serial_number, atom_name, 
@@ -50,20 +51,18 @@ class Residue:
         self.charged_groups = []
         self.aromatic_rings = []
 
+    def find_atom(self, atom_name):
+        """Find an atom in the residue from its name."""
+        for atom in self.atoms:
+            if atom.atom_name == atom_name:
+                return atom
+        return None
+
     def add_atom(self, atom):
-        """Add an atom to the residue.
-
-        If alternative locations exist for the same atom, keep the atom with the highest occupancy.
-
-        Parameters
-        ----------
-        atom : Atom
-            Atom to add to the residue.
-
-        Returns
-        -------
-        None
-        """
+        """Add an atom to the residue."""
+        if atom.is_hydrogen():
+            self.atoms.append(atom)
+            return
         for index, existing_atom in enumerate(self.atoms):
             if existing_atom.atom_name == atom.atom_name:
                 if atom.occupancy > existing_atom.occupancy:
@@ -338,47 +337,66 @@ def find_interface_pairs(chain1, chain2, threshold):
     return interface_pairs
 
 def add_hydrogens(file_name):
-    """Add hydrogens atoms to a PDB file using Open Babel.
-    
-    Parameters
-    ----------
-    file_name : str
-        Path of the input PDB file
-    
-    Returns
-    -------
-    str
-        Path of the protonated PDB file
-    """
+    """Add hydrogen atoms to a PDB file using Open Babel."""
     output_file = file_name.rsplit(".", 1)[0] + "_H.pdb"
-    subprocess.run(["obabel", file_name, "-O", output_file, "-h"], check=True)
+    conversion = openbabel.OBConversion()
+    conversion.SetInAndOutFormats("pdb", "pdb")
+    molecule = openbabel.OBMol()
+    conversion.ReadFile(molecule, file_name)
+    molecule.AddHydrogens()
+    conversion.WriteFile(molecule, output_file)
     return output_file
 
 # Detection of hydrophobic contacts
-# Hydrophobic residues
-HYDROPHOBIC_ATOMS = {"ALA": {"CB"},
-                     "VAL": {"CB", "CG1", "CG2"},
-                     "LEU": {"CB", "CG", "CD1", "CD2"},
-                     "ILE": {"CB", "CG1", "CG2", "CD1"},
-                     "MET": {"CB", "CG", "CE"},
-                     "PHE": {"CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ"},
-                     "TRP": {"CB", "CG", "CD1", "CD2", "CE2", "CE3", "CZ2", "CZ3", "CH2"},
-                     "TYR": {"CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ"},
-                     "PRO": {"CB", "CG", "CD"}}
+def read_openbabel_molecule(file_name):
+    """Read a PDB file with Open Babel.
 
-def prepare_hydrophobic_atoms(residue):
-    """Identify hydrophobic atoms in a residue."""
-    residue.hydrophobic_atoms = []
-    atom_names = HYDROPHOBIC_ATOMS.get(residue.residue_name, set())
-    for atom in residue.atoms:
-        if atom.atom_name in atom_names:
+    Parameters
+    ----------
+    file_name : str
+        Path of the PDB file.
+
+    Returns
+    -------
+    openbabel.OBMol
+        Molecule containing atoms and perceived bonds.
+    """
+    conversion = openbabel.OBConversion()
+    conversion.SetInFormat("pdb")
+    molecule = openbabel.OBMol()
+    conversion.ReadFile(molecule, file_name)
+    return molecule
+                
+def prepare_hydrophobic_atoms(protein, molecule):
+    """Identify hydrophobic carbon atoms using Open Babel."""
+    for ob_atom in openbabel.OBMolAtomIter(molecule):
+        if ob_atom.GetAtomicNum() != 6:
+            continue
+        hydrophobic = True
+        for neighbor in openbabel.OBAtomAtomIter(ob_atom):
+            if neighbor.GetAtomicNum() not in (1, 6):
+                hydrophobic = False
+                break
+        if not hydrophobic:
+            continue
+        ob_residue = ob_atom.GetResidue()
+        if ob_residue is None:
+            continue
+        chain = protein.find_chain(ob_residue.GetChain())
+        if chain is None:
+            continue
+        residue = chain.find_residue(ob_residue.GetNum(), "")
+        if residue is None:
+            continue
+        atom_name = ob_residue.GetAtomID(ob_atom).strip()
+        atom = residue.find_atom(atom_name)
+        if atom is not None:
             residue.hydrophobic_atoms.append(atom)
 
-def prepare_residue(residue):
+def prepare_protein(protein, file_name):
     """Prepare chemical features used for interaction detection."""
-    prepare_hydrophobic_atoms(residue)
-
-HYDROPHOBIC_DISTANCE = 4.0
+    molecule = read_openbabel_molecule(file_name)
+    prepare_hydrophobic_atoms(protein, molecule)
 
 def detect_hydrophobic_contact(residue1, residue2):
     """Detect a hydrophobic contact between two residues.
@@ -404,11 +422,7 @@ def detect_hydrophobic_contact(residue1, residue2):
                     minimum_distance = distance
     return minimum_distance
 
-def prepare_protein(protein):
-    """Prepare all residues of a protein for interaction detection."""
-    for chain in protein.chains:
-        for residue in chain.residues:
-            prepare_residue(residue)
+
 
 def main():
     parser = OptionParser()
@@ -431,8 +445,10 @@ def main():
         print("No hydrogen atoms found. Adding hydrogens with Open Babel")
         file_name = add_hydrogens(file_name)
         protein = read_pdb(file_name)
+
+    
     # Prepare to classification
-    prepare_protein(protein)
+    prepare_protein(protein, file_name)
     chain1 = protein.find_chain(chain_identifiers[0])
     chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
@@ -465,6 +481,7 @@ def main():
         print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
             "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
             "hydrophobic distance :", round(distance, 2))
+
         
 if __name__ == "__main__":
     main()
