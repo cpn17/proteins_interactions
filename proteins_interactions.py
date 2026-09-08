@@ -66,13 +66,6 @@ class Residue:
                 return atom
         return None
 
-    def find_atom_by_serial(self, atom_serial_number):
-        """Find an atom in the residue from its serial number."""
-        for atom in self.atoms:
-            if atom.atom_serial_number == atom_serial_number:
-                return atom
-        return None
-
     def find_atom_by_coordinates(self, x, y, z, tolerance=0.01):
         """Find an atom in the residue from its coordinates."""
         for atom in self.atoms:
@@ -111,45 +104,14 @@ class Chain:
         self.residues = []
 
     def find_residue(self, residue_sequence_number, code_for_insertion_of_residues):
-        """Find a residue in the chain.
-
-        Parameters
-        ----------
-        residue_sequence_number : int
-            Sequence number of the residue.
-        code_for_insertion_of_residues : str
-            PDB insertion code of the residue.
-
-        Returns
-        -------
-        Residue or None
-            Matching residue if found, otherwise None.
-        """
+        """Find a residue in the chain."""
         for residue in self.residues:
             if residue.residue_sequence_number == residue_sequence_number and residue.code_for_insertion_of_residues == code_for_insertion_of_residues:
                 return residue
         return None
 
     def add_atom_to_residue(self, residue_name, residue_sequence_number, code_for_insertion_of_residues, atom):
-        """Add an atom to the corresponding residue of the chain.
-
-        A new residue is created if it is not already present.
-
-        Parameters
-        ----------
-        residue_name : str
-            Three-letter residue name.
-        residue_sequence_number : int
-            Sequence number of the residue.
-        code_for_insertion_of_residues : str
-            PDB insertion code of the residue.
-        atom : Atom
-            Atom to add.
-
-        Returns
-        -------
-        None
-        """
+        """Add an atom to the corresponding residue of the chain."""
         residue = self.find_residue(residue_sequence_number, code_for_insertion_of_residues)
         if residue is None:
             residue = Residue(residue_name, residue_sequence_number, code_for_insertion_of_residues)
@@ -175,45 +137,14 @@ class Protein:
         self.alternative_locations = set()
 
     def find_chain(self, chain_identifier):
-        """Find a chain from its identifier.
-
-        Parameters
-        ----------
-        chain_identifier : str
-            Identifier of the chain.
-
-        Returns
-        -------
-        Chain or None
-            Matching chain if found, otherwise None.
-        """
+        """Find a chain from its identifier."""
         for chain in self.chains:
             if chain.chain_identifier == chain_identifier:
                 return chain
         return None
     
     def add_atom_to_chain(self, chain_identifier, residue_name, residue_sequence_number, code_for_insertion_of_residues, atom):
-        """Add an atom to the corresponding chain and residue.
-
-        A new chain is created if it is not already present.
-
-        Parameters
-        ----------
-        chain_identifier : str
-            Identifier of the chain.
-        residue_name : str
-            Three-letter residue name.
-        residue_sequence_number : int
-            Sequence number of the residue.
-        code_for_insertion_of_residues : str
-            PDB insertion code of the residue.
-        atom : Atom
-            Atom to add.
-
-        Returns
-        -------
-        None
-        """
+        """Add an atom to the corresponding chain and residue."""
         chain = self.find_chain(chain_identifier)
         if chain is None : 
             chain = Chain(chain_identifier)
@@ -249,18 +180,7 @@ class Protein:
         return f"Protein : {self.protein_name}, chains : {len(self.chains)}, {self.number_of_residues()} residues, {self.number_of_atoms()} atoms"
 
 def download_pdb(pdb_id):
-    """Download a PDB structure from the Protein Data Bank.
-
-    Parameters
-    ----------
-    pdb_id : str
-        PDB identifier, ex : 2xa0.
-
-    Returns
-    -------
-    str
-        Path of the downloaded PDB file.
-    """
+    """Download a PDB structure from the Protein Data Bank."""
     pdb_list = PDBList()
     file_name = pdb_list.retrieve_pdb_file(pdb_id, pdir=".", file_format="pdb")
     return file_name
@@ -285,20 +205,7 @@ def read_missing_atoms(line, protein):
         protein.missing_atoms.append((chain_identifier, residue_name, residue_sequence_number, atom_names))
 
 def read_pdb(file_name):
-    """Read protein atoms from a PDB file.
-
-    Lines startswith "ATOM" are parsed and organized into Atom, Residue, Chain and Protein objects.
-
-    Parameters
-    ----------
-    file_name : str
-        Name or path of the PDB file.
-
-    Returns
-    -------
-    Protein
-        Protein object containing the atoms, residues and chains read from the PDB file.
-    """
+    """Read protein atoms from a PDB file."""
     protein = Protein(file_name)
     with open(file_name, "r") as file: 
         for line in file:
@@ -339,6 +246,22 @@ def read_pdb(file_name):
             protein.add_atom_to_chain(chain_identifier, residue_name, residue_sequence_number, code_for_insertion_of_residues, atom)
     return protein
 
+def calculate_center(atoms):
+    """Calculate the geometric center of a collection of atoms."""
+    x = sum(atom.x for atom in atoms) / len(atoms)
+    y = sum(atom.y for atom in atoms) / len(atoms)
+    z = sum(atom.z for atom in atoms) / len(atoms)
+    return x, y, z
+
+def angle_between_vectors(vector1, vector2):
+    """Calculate the angle between two vectors in degrees."""
+    dot_product = sum(a * b for a, b in zip(vector1, vector2))
+    norm1 = math.sqrt(sum(a**2 for a in vector1))
+    norm2 = math.sqrt(sum(a**2 for a in vector2))
+    cosine = dot_product / (norm1 * norm2)
+    cosine = max(-1.0, min(1.0, cosine))
+    return math.degrees(math.acos(cosine))
+
 def find_interface_pairs(chain1, chain2, threshold):
     """Find residue pairs in contact and their minimum heavy-atom distance."""
     interface_pairs = []
@@ -371,18 +294,7 @@ def add_hydrogens(file_name):
 
 # Detection of hydrophobic contacts
 def read_openbabel_molecule(file_name):
-    """Read a PDB file with Open Babel.
-
-    Parameters
-    ----------
-    file_name : str
-        Path of the PDB file.
-
-    Returns
-    -------
-    openbabel.OBMol
-        Molecule containing atoms and perceived bonds.
-    """
+    """Read a PDB file with Open Babel."""
     conversion = openbabel.OBConversion()
     conversion.SetInFormat("pdb")
     molecule = openbabel.OBMol()
@@ -434,12 +346,9 @@ def prepare_hbond_acceptors(protein, molecule):
         if not ob_atom.IsHbondAcceptor():
             continue
         atom = map_openbabel_atom(protein, ob_atom)
-        if atom is None:
-            continue
-        ob_residue = ob_atom.GetResidue()
-        chain = protein.find_chain(ob_residue.GetChain())
-        residue = chain.find_residue(ob_residue.GetNum(), "")
-        residue.hbond_acceptors.append(atom)
+        residue = map_openbabel_residue(protein, ob_atom)
+        if atom is not None and residue is not None:
+            residue.hbond_acceptors.append(atom)
 
 def prepare_hbond_donors(protein, molecule):
     """Identify hydrogen-bond donor and hydrogen atom pairs using Open Babel."""
@@ -463,12 +372,7 @@ def calculate_angle(atom1, vertex, atom2):
     """Calculate the angle between three atoms in degrees."""
     vector1 = (atom1.x - vertex.x, atom1.y - vertex.y, atom1.z - vertex.z)
     vector2 = (atom2.x - vertex.x, atom2.y - vertex.y, atom2.z - vertex.z)
-    dot_product = sum(a * b for a, b in zip(vector1, vector2))
-    norm1 = math.sqrt(sum(a**2 for a in vector1))
-    norm2 = math.sqrt(sum(a**2 for a in vector2))
-    cosine = dot_product / (norm1 * norm2)
-    cosine = max(-1.0, min(1.0, cosine))
-    return math.degrees(math.acos(cosine))
+    return angle_between_vectors(vector1, vector2)
 
 def prepare_protein(protein, file_name):
     """Prepare chemical features used for interaction detection."""
@@ -480,20 +384,7 @@ def prepare_protein(protein, file_name):
     prepare_aromatic_rings(protein)
 
 def detect_hydrophobic_contact(residue1, residue2):
-    """Detect a hydrophobic contact between two residues.
-
-    Parameters
-    ----------
-    residue1 : Residue
-        First residue.
-    residue2 : Residue
-        Second residue.
-
-    Returns
-    -------
-    float or None
-        Minimum distance between hydrophobic atoms if a contact is found, otherwise None.
-    """
+    """Detect a hydrophobic contact between two residues."""
     minimum_distance = None
     for atom1 in residue1.hydrophobic_atoms:
         for atom2 in residue2.hydrophobic_atoms:
@@ -502,6 +393,23 @@ def detect_hydrophobic_contact(residue1, residue2):
                 if minimum_distance is None or distance < minimum_distance:
                     minimum_distance = distance
     return minimum_distance
+
+def map_openbabel_residue(protein, ob_atom):
+    """Map an Open Babel atom to its Residue object."""
+    ob_residue = ob_atom.GetResidue()
+    if ob_residue is None:
+        return None
+    chain = protein.find_chain(ob_residue.GetChain())
+    if chain is None:
+        return None
+    return chain.find_residue(ob_residue.GetNum(), "")
+
+def map_openbabel_atom(protein, ob_atom):
+    """Map an Open Babel atom to an Atom object."""
+    residue = map_openbabel_residue(protein, ob_atom)
+    if residue is None:
+        return None
+    return residue.find_atom_by_coordinates(ob_atom.GetX(), ob_atom.GetY(), ob_atom.GetZ())
 
 def find_hydrogen_bonds(residue1, residue2):
     """Find hydrogen bonds between two residues."""
@@ -533,10 +441,7 @@ class ChargedGroup:
 
     def center(self):
         """Calculate the geometric center of the charged group."""
-        x = sum(atom.x for atom in self.atoms) / len(self.atoms)
-        y = sum(atom.y for atom in self.atoms) / len(self.atoms)
-        z = sum(atom.z for atom in self.atoms) / len(self.atoms)
-        return x, y, z
+        return calculate_center(self.atoms)
 
 def prepare_charged_groups(protein):
     """Identify charged functional groups in protein residues."""
@@ -605,10 +510,7 @@ class AromaticRing:
 
     def center(self):
         """Calculate the geometric center of the ring."""
-        x = sum(atom.x for atom in self.atoms) / len(self.atoms)
-        y = sum(atom.y for atom in self.atoms) / len(self.atoms)
-        z = sum(atom.z for atom in self.atoms) / len(self.atoms)
-        return x, y, z
+        return calculate_center(self.atoms)
 
     def normal(self):
         """Calculate a normal vector to the ring plane."""
@@ -643,16 +545,6 @@ def prepare_aromatic_rings(protein):
                 if len(atoms) == len(atom_names):
                     residue.aromatic_rings.append(AromaticRing(atoms))
 
-def angle_between_vectors(vector1, vector2):
-    """Calculate the angle between two vectors in degrees."""
-    dot_product = sum(a * b for a, b in zip(vector1, vector2))
-    norm1 = math.sqrt(sum(a**2 for a in vector1))
-    norm2 = math.sqrt(sum(a**2 for a in vector2))
-    cosine = dot_product / (norm1 * norm2)
-    cosine = max(-1.0, min(1.0, cosine))
-    angle = math.degrees(math.acos(cosine))
-    return min(angle, 180.0 - angle)
-
 def calculate_ring_offset(center1, center2, normal):
     """Calculate the lateral offset between two ring centers."""
     vector = (center2[0] - center1[0],
@@ -675,6 +567,7 @@ def find_aromatic_interactions(residue1, residue2):
             normal1 = ring1.normal()
             normal2 = ring2.normal()
             angle = angle_between_vectors(normal1, normal2)
+            angle = min(angle, 180.0 - angle)
             offset1 = calculate_ring_offset(center1, center2, normal1)
             offset2 = calculate_ring_offset(center2, center1, normal2)
             offset = min(offset1, offset2)
@@ -692,12 +585,13 @@ def main():
     parser.add_option("--chains", dest="chains", help="Two chains to compare, separated by a comma, ex: A,C")
     parser.add_option("--threshold", dest="threshold", type="float", default=6.0, help="Distance threshold in Angstroms, default: 6.0")
     options, args = parser.parse_args()
-    chain_identifiers = options.chains.split(",")
+    
     threshold = options.threshold
     if len(args) != 1:
         parser.error("Please give one PDB identifant")
     if options.chains is None:
         parser.error("Please specify 2 chain with --chains, ex: --chains A,C")
+    chain_identifiers = options.chains.split(",")
     if len(chain_identifiers) != 2:
             parser.error("--chains requires two chain identifiers separated by a comma, ex: A,C")
     pdb_id = args[0]
@@ -711,27 +605,6 @@ def main():
     
     # Prepare to classification
     prepare_protein(protein, file_name)
-    lys57 = protein.find_chain("C").find_residue(57, "")
-    asp111 = protein.find_chain("A").find_residue(111, "")
-
-    print("LYS57 donors:")
-    for donor, hydrogen in lys57.hbond_donors:
-        print("donor:", donor.atom_name, "H:", hydrogen.atom_serial_number)
-
-    print("ASP111 acceptors:")
-    for acceptor in asp111.hbond_acceptors:
-        print("acceptor:", acceptor.atom_name)
-
-    for donor, hydrogen in lys57.hbond_donors:
-        for acceptor in asp111.hbond_acceptors:
-            distance = donor.distance_to(acceptor)
-            angle = calculate_angle(donor, hydrogen, acceptor)
-            print("donor:", donor.atom_name,
-                "H:", hydrogen.atom_serial_number,
-                "acceptor:", acceptor.atom_name,
-                "distance:", round(distance, 2),
-                "angle:", round(angle, 2))
-
     chain1 = protein.find_chain(chain_identifiers[0])
     chain2 = protein.find_chain(chain_identifiers[1])
     for chain in protein.chains:
@@ -761,9 +634,11 @@ def main():
             hydrophobic_contacts.append((residue1, residue2, hydrophobic_distance))
     print("Hydrophobic contacts :", len(hydrophobic_contacts))
     for residue1, residue2, distance in hydrophobic_contacts:
-        print(chain1.chain_identifier, residue1.residue_name, residue1.residue_sequence_number,
-            "-", chain2.chain_identifier, residue2.residue_name, residue2.residue_sequence_number,
-            "hydrophobic distance :", round(distance, 2))
+        print(chain1.chain_identifier, residue1.residue_name, 
+              residue1.residue_sequence_number,"-", 
+              chain2.chain_identifier, residue2.residue_name, 
+              residue2.residue_sequence_number, 
+              "hydrophobic distance :", round(distance, 2))
 
     # Ponts salins
     salt_bridges = []
