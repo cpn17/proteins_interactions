@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-proteins-contacts = "proteins_contacts:main"
+proteins_contacts/proteins_interactions.py
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
