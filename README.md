@@ -29,29 +29,38 @@ Please **restart your terminal** after uv successfulled installation.
 
 **2. Clone this repository to your local space** 
 
+```bash
 git clone https://github.com/cpn17/proteins_interactions.git
-
+```
 
 **3.  Synchronize the environement**
 
 - Go to the local repository : 
 
+```bash
 cd proteins_interactions
+```
 
 - Synchronize :
 
+```bash
 uv sync
+```
 
 
 **4. Launch the program with examples**
 
 - PDB ID 2XA0, chaîns A and C :
 
+```bash
 uv run proteins-contacts 2xa0 --chains A,C --threshold 6.0
+```
 
 - PDB ID 2DQJ, chains H and Y :
 
+```bash
 uv run proteins-contacts 2dqj --chains H,Y --threshold 6.0
+```
 
 
 **5. Check the results**
@@ -70,6 +79,7 @@ Examples :
 
 - results/2026-09-10_09-10-06/2dqj_H_Y_contacts.csv
 
+
 **6. Personnalize the command with your PDB structures choices with the syntax**
 
 proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 [options]
@@ -80,14 +90,18 @@ Where the options are :
 
 --threshold 6.0 : threshold to détect the interface, in Angstrom (Å)
 
+
 **7. Visualization the contacts with Pymol (in developpement)**
 
 These function is not completed and must be improved
 
+```bash
 pymol visualization/2xa0.pml
+```
 
+```bash
 pymol visualization/2dqj.pml
-
+```
 
 
 
