@@ -27,15 +27,22 @@ https://docs.astral.sh/uv/getting-started/installation/
 
 Please **restart your terminal** after uv successfulled installation.
 
+
 **2. Clone this repository to your local space** 
 
 git clone https://github.com/cpn17/proteins_interactions.git
 
+
 **3.  Synchronize the environement**
 
+Go to the local repository : 
+
 cd proteins_interactions
-git 
+
+Synchronize :
+
 uv sync
+
 
 **4. Launch the program with examples**
 
@@ -46,6 +53,7 @@ uv run proteins-contacts 2xa0 --chains A,C --threshold 6.0
 - PDB ID 2DQJ, chains H and Y :
 
 uv run proteins-contacts 2dqj --chains H,Y --threshold 6.0
+
 
 **5. Check the results**
 
@@ -63,11 +71,13 @@ Examples :
 
 - results/2026-09-10_09-10-06/2dqj_H_Y_contacts.csv
 
+
 **6. Visualization the reullts with Pymol**
 
 pymol visualization/2xa0.pml
 
 pymol visualization/2dqj.pml
+
 
 **7. Personnalize the command with your PDB structures choices with the syntax**
 
@@ -77,7 +87,7 @@ Where the options are :
 
 --chains CHAIN1,CHAIN2 : chaîns to analyze
 
---threshold 6.0 : threshol to détect the interface in Angstrom (Å)
+--threshold 6.0 : threshold to détect the interface, in Angstrom (Å)
 
 
 
