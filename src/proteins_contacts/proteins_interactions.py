@@ -3,6 +3,8 @@ from Bio.PDB import PDBList
 import math
 from openbabel import openbabel
 import csv
+import os
+from datetime import datetime
 
 AA_STANDARD = {"ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"}
 HYDROPHOBIC_DISTANCE = 4.0
@@ -663,9 +665,14 @@ def main():
     if len(chain_identifiers) != 2:
             parser.error("--chains requires two chain identifiers separated by a comma, ex: A,C")
     pdb_id = args[0]
+    execution_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    results_directory = os.path.join("results", execution_date)
+    os.makedirs(results_directory, exist_ok=True)
     output_file = options.output
     if output_file is None:
         output_file = f"{pdb_id}_{chain_identifiers[0]}_{chain_identifiers[1]}_contacts.csv"
+    output_file = os.path.join(results_directory, output_file)  
+
     file_name = download_pdb(pdb_id)
     protein = read_pdb(file_name)
     print(protein)
