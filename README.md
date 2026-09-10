@@ -86,9 +86,9 @@ proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 --threshold THRESHOLD_IN_ANGSTRO
 
 Where the options are : 
 
---chains CHAIN1,CHAIN2 : chaîns to analyze, ex : --chains A,C
+--chains CHAIN1,CHAIN2 : chaîns to analyze (ex : --chains A,C)
 
---threshold THRESHOLD_IN_ANGSTROM : threshold to detect the interface, ex : --threshold 6.0
+--threshold THRESHOLD_IN_ANGSTROM : threshold to detect the interface (ex : --threshold 6.0)
 
 
 **7. Visualization the contacts with Pymol (in developpement)**
