@@ -14,9 +14,7 @@ The program allows you to:
 
 - detect four categories of interactions: hydrophobic contacts, hydrogen bonds, salt bridges, aromatic π–π interactions;
 
-- generate a CSV file containing the residues in contact, their minimum distance, and the types of interactions detected;
-
-- visualize the interface using a PyMOL script.
+- generate a CSV file containing the residues in contact, their minimum distance, and the types of interactions detected.
 
 
 # Installation
@@ -71,15 +69,7 @@ Examples :
 
 - results/2026-09-10_09-10-06/2dqj_H_Y_contacts.csv
 
-
-**6. Visualization the reullts with Pymol**
-
-pymol visualization/2xa0.pml
-
-pymol visualization/2dqj.pml
-
-
-**7. Personnalize the command with your PDB structures choices with the syntax**
+**6. Personnalize the command with your PDB structures choices with the syntax**
 
 proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 [options]
 
@@ -88,6 +78,14 @@ Where the options are :
 --chains CHAIN1,CHAIN2 : chaîns to analyze
 
 --threshold 6.0 : threshold to détect the interface, in Angstrom (Å)
+
+**7. Visualization the contacts with Pymol (in developpement)**
+These function is not completed and must be improved
+
+pymol visualization/2xa0.pml
+
+pymol visualization/2dqj.pml
+
 
 
 
