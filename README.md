@@ -45,13 +45,36 @@ uv run proteins-contacts 2xa0 --chains A,C --threshold 6.0
 
 uv run proteins-contacts 2dqj --chains H,Y --threshold 6.0
 
-5. Personnalize the command with your PDB structures choices with the syntax : 
+5. Check the results : 
+
+For each PDB code, the program will 
+
+- create directory named results/ 
+
+- create a sub-directory named : Year-Month-Day-Hour-Minute-Second 
+
+- In this sub directory, a .csv file contains all the contacts detected with classification into 4 types.
+
+Examples : 
+
+- results/2026-09-10_09-05-23/2xa0_A_C_contacts.csv
+
+- results/2026-09-10_09-10-06/2dqj_H_Y_contacts.csv
+
+6. Visualization the reullts with Pymol
+
+pymol visualization/2xa0.pml
+
+pymol visualization/2dqj.pml
+
+7. Personnalize the command with your PDB structures choices with the syntax : 
 
 proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 [options]
 
 Where the options are : 
 
 --chains CHAIN1,CHAIN2 : chaîns to analyze
+
 --threshold 6.0 : threshol to détect the interface in Angstrom (Å)
 
 
