@@ -1,18 +1,16 @@
 # Presentation
 
-The program allows you to:
+The program allows to:
 
-- download a structure using its PDB ID;
+- download a structure using its PDB ID (ex : 2xa0, 2qdj);
 
-- read the ATOM records from a PDB file;
+- read the ATOM records from a PDB file andrepresent the structure using Protein, Chain, Residue, and Atom objects;
 
-- represent the structure using Protein, Chain, Residue, and Atom objects;
+- select two protein chains with a configurable option (--chains CHAIN1,CHAIN2);
 
-- select two protein chains;
+- detect interface residue pairs based on a configurable threshold, set by default to 6 Å (--threshold 6.0);
 
-- detect interface residue pairs based on a configurable threshold, set by default to 6 Å;
-
-- detect four categories of interactions: hydrophobic contacts, hydrogen bonds, salt bridges, aromatic π–π interactions;
+- detect 4 categories of interactions: hydrophobic contacts, hydrogen bonds, salt bridges, aromatic π–π interactions;
 
 - generate a CSV file containing the residues in contact, their minimum distance, and the types of interactions detected.
 
@@ -82,13 +80,15 @@ Examples :
 
 **6. Personnalize the command with your PDB structures choices with the syntax**
 
-proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 [options]
+```bash
+proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 --threshold THRESHOLD_IN_ANGSTROM 
+```
 
 Where the options are : 
 
---chains CHAIN1,CHAIN2 : chaîns to analyze
+--chains CHAIN1,CHAIN2 : chaîns to analyze, ex : --chains A,C
 
---threshold 6.0 : threshold to détect the interface, in Angstrom (Å)
+--threshold THRESHOLD_IN_ANGSTROM : threshold to detect the interface, ex : --threshold 6.0
 
 
 **7. Visualization the contacts with Pymol (in developpement)**
