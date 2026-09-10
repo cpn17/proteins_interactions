@@ -21,21 +21,23 @@ The program allows you to:
 
 # Installation
 
-## With uv :
-
-1. Install uv by following astral documentation : 
+**1. Install uv by following astral documentation** 
 
 https://docs.astral.sh/uv/getting-started/installation/
 
-2.  Synchronize the dependancies
+Please **restart your terminal** after uv successfulled installation.
 
-uv sync
-
-3. Clone this repository to your local space 
+**2. Clone this repository to your local space** 
 
 git clone https://github.com/cpn17/proteins_interactions.git
 
-4. Launch the program :
+**3.  Synchronize the environement**
+
+cd proteins_interactions
+git 
+uv sync
+
+**4. Launch the program with examples**
 
 - PDB ID 2XA0, chaîns A and C :
 
@@ -45,7 +47,7 @@ uv run proteins-contacts 2xa0 --chains A,C --threshold 6.0
 
 uv run proteins-contacts 2dqj --chains H,Y --threshold 6.0
 
-5. Check the results : 
+**5. Check the results**
 
 For each PDB code, the program will 
 
@@ -61,13 +63,13 @@ Examples :
 
 - results/2026-09-10_09-10-06/2dqj_H_Y_contacts.csv
 
-6. Visualization the reullts with Pymol
+**6. Visualization the reullts with Pymol**
 
 pymol visualization/2xa0.pml
 
 pymol visualization/2dqj.pml
 
-7. Personnalize the command with your PDB structures choices with the syntax : 
+**7. Personnalize the command with your PDB structures choices with the syntax**
 
 proteins-contacts PDB_ID --chains CHAIN1,CHAIN2 [options]
 
