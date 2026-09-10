@@ -41,7 +41,7 @@ git clone https://github.com/cpn17/proteins_interactions.git
 cd proteins_interactions
 ```
 
-- Synchronize :
+- Install dependancies :
 
 ```bash
 uv sync
@@ -69,7 +69,7 @@ For each PDB code, the program will
 
 - create directory named results/ 
 
-- create a sub-directory named : Year-Month-Day-Hour-Minute-Second 
+- create a sub-directory named : Year-Month-Day_Hour-Minute-Second 
 
 - In this sub directory, a .csv file contains all the contacts detected with classification into 4 types.
 

@@ -182,9 +182,11 @@ class Protein:
         return f"Protein : {self.protein_name}, chains : {len(self.chains)}, {self.number_of_residues()} residues, {self.number_of_atoms()} atoms"
 
 def download_pdb(pdb_id):
-    """Download a PDB structure from the Protein Data Bank."""
+    """Download a PDB structure into the data directory."""
+    data_directory = "data"
+    os.makedirs(data_directory, exist_ok=True)
     pdb_list = PDBList()
-    file_name = pdb_list.retrieve_pdb_file(pdb_id, pdir=".", file_format="pdb")
+    file_name = pdb_list.retrieve_pdb_file(pdb_id, pdir=data_directory, file_format="pdb")
     return file_name
 
 def read_missing_residue(line, protein):
