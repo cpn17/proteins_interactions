@@ -19,6 +19,7 @@ The program allows you to:
 
 # Installation
 
+
 **1. Install uv by following astral documentation** 
 
 https://docs.astral.sh/uv/getting-started/installation/
@@ -33,11 +34,11 @@ git clone https://github.com/cpn17/proteins_interactions.git
 
 **3.  Synchronize the environement**
 
-Go to the local repository : 
+- Go to the local repository : 
 
 cd proteins_interactions
 
-Synchronize :
+- Synchronize :
 
 uv sync
 
@@ -80,6 +81,7 @@ Where the options are :
 --threshold 6.0 : threshold to détect the interface, in Angstrom (Å)
 
 **7. Visualization the contacts with Pymol (in developpement)**
+
 These function is not completed and must be improved
 
 pymol visualization/2xa0.pml
